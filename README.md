@@ -1,0 +1,1 @@
+Programming exercises, mostly in Haskell. 
