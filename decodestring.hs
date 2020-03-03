@@ -20,8 +20,12 @@ import Text.ParserCombinators.ReadP
 -- s = "3[a]2[bc]", return "aaabcbc".
 -- s = "3[a2[c]]", return "accaccacc".
 -- s = "2[abc]3[cd]ef", return "abcabccdcdcdef".
--- |]
 
+inputs   = words "3[a]2[bc] 3[a2[c]] 2[abc]3[cd]ef"
+expected = words "aaabcbc accaccacc abcabccdcdcdef"
+
+solve :: String -> String
+solve = decode . parse
 
 data Encoded 
     = Base String 
@@ -31,50 +35,41 @@ data Encoded
 
 decode :: Encoded -> String 
 decode (Base s) = s
-decode (Node k enc) = repeatTimes k (decode enc) where 
-    repeatTimes times string = concat . take times $ repeat string
+decode (Node k enc) = repeatTimes k (decode enc) 
 decode (List e) = concatMap decode e
 
+repeatTimes :: Int -> String -> String
+repeatTimes times string = concat . take times $ repeat string
+
+
 parse :: String -> Encoded
-parse  = fst . head . readP_to_S encoded
+parse  = fst . head . readP_to_S encodedP
 
-encoded :: ReadP Encoded
-encoded = do 
-    out <- node <|> list <|> base 
-    eof 
-    return out
+encodedP :: ReadP Encoded
+encodedP = listP <* eof
 
-base :: ReadP Encoded 
-base = Base <$> letters
+listP :: ReadP Encoded
+listP = List <$> many1 (nodeP <|> baseP)
 
-node :: ReadP Encoded 
-node = Node <$> digits <*> (bracketed (base <|> node <|> list ))
+nodeP :: ReadP Encoded
+nodeP = Node <$> intP <*> between lp rp (nodeP <|> baseP <|> listP) where
+    lp = char '['
+    rp = char ']'
 
-list :: ReadP Encoded
-list = List <$> many1 (node <|> base)
+baseP :: ReadP Encoded
+baseP = Base <$> many1 (satisfy isBase) where
+    isBase i = elem i basechars
+    basechars = ['a'..'z'] ++ ['A'..'Z']
 
-letters :: ReadP String 
-letters = munch1 letter where
-    letter ch = elem ch (['a'..'z'] ++ ['A'..'Z'])
+intP :: ReadP Int
+intP = read <$> many1 (satisfy isInt) where
+    isInt i = elem i intchars
+    intchars = concatMap show [0..9]
 
-digits :: ReadP Int
-digits = read <$> many1 digit where 
-    digit = satisfy (\ch -> ch >= '0' && ch <= '9')
-
-bracketed :: ReadP a -> ReadP a
-bracketed  = between left right where
-    left = char '['
-    right = char ']'
-
-
-main = mapM_ test ["3[a]2[bc]", "3[a2[c]]", "2[abc]3[cd]ef"]
+main :: IO ()
+main = do
+    putStrLn $ "inputs:   " ++ show inputs
+    putStrLn $ "expected: " ++ show expected
+    putStrLn $ "actual:   " ++ show (map solve inputs)
     
-test str = do 
-    let parsed = parse str 
-        decoded = decode parsed 
-    putStrLn "\nTesting: "
-    putStrLn str
-    print parsed
-    putStrLn decoded
-
 
